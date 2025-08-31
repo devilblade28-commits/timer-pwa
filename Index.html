@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Simple Timer + Sound</title>
+  <meta name="theme-color" content="#0b0e14" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <style>
+    body{font-family:Arial, sans-serif;text-align:center;background:#0b0e14;color:#eaeaea;
+         min-height:100vh;display:flex;justify-content:center;align-items:center;flex-direction:column;margin:0}
+    #time{font-size:48px;margin-bottom:14px}
+    button{padding:10px 20px;margin:5px;font-size:16px;border:none;border-radius:6px;cursor:pointer}
+    #start{background:#4CAF50;color:#fff} #pause{background:#f39c12;color:#fff} #reset{background:#e74c3c;color:#fff}
+    label{font-size:14px;opacity:.8;margin-top:6px}
+  </style>
+</head>
+<body>
+  <h1>⏱️ Simple Timer + Sound</h1>
+  <div id="time">00:00</div>
+  <div>
+    <button id="start">Start</button>
+    <button id="pause">Pause</button>
+    <button id="reset">Reset</button>
+  </div>
+  <label><input type="checkbox" id="tick"> Tick tiap detik</label>
+
+  <script>
+    // --- Audio: bikin bunyi tanpa file (Web Audio API) ---
+    let audioCtx = null;
+    function ensureAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    function beep({freq=880, dur=0.08, type='sine', vol=0.2} = {}) {
+      if (!audioCtx) return; 
+      const t0 = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(vol, t0 + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0); osc.stop(t0 + dur);
+    }
+    const sfx = {
+      click: ()=>beep({freq:650, dur:0.05, type:'square', vol:0.15}),
+      pause: ()=>beep({freq:420, dur:0.07, type:'triangle', vol:0.18}),
+      reset: ()=>{ beep({freq:500, dur:0.06}); setTimeout(()=>beep({freq:350, dur:0.08}), 70); },
+      tick:  ()=>beep({freq:1200, dur:0.015, type:'square', vol:0.08})
+    };
+
+    // --- Timer logic ---
+    let seconds = 0;
+    let timer = null;
+    const timeEl = document.getElementById("time");
+    const tickChk = document.getElementById("tick");
+
+    function updateDisplay() {
+      const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+      const s = String(seconds % 60).padStart(2, '0');
+      timeEl.textContent = `${m}:${s}`;
+    }
+
+    document.getElementById("start").onclick = () => {
+      ensureAudio();
+      if (timer) return;
+      sfx.click();
+      timer = setInterval(() => {
+        seconds++;
+        updateDisplay();
+        if (tickChk.checked) sfx.tick();
+      }, 1000);
+    };
+
+    document.getElementById("pause").onclick = () => {
+      ensureAudio();
+      if (timer) { clearInterval(timer); timer = null; }
+      sfx.pause();
+    };
+
+    document.getElementById("reset").onclick = () => {
+      ensureAudio();
+      if (timer) { clearInterval(timer); timer = null; }
+      seconds = 0;
+      updateDisplay();
+      sfx.reset();
+    };
+
+    updateDisplay();
+
+    // --- Register Service Worker ---
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js');
+      });
+    }
+  </script>
+</body>
+</html>
